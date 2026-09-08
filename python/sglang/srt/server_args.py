@@ -234,6 +234,17 @@ class ServerArgs:
         config being inspected, one being handed to a subprocess that will
         resolve it itself -- stays raw.
         """
+        # Loading plugins is a process-level side effect that does not touch
+        # the record. It happens here because construction is the earliest
+        # point every path shares: an embedder that builds ServerArgs and
+        # resolves the model config before Engine.__init__ would otherwise
+        # run the resolution path (ModelConfig, config/tokenizer loaders)
+        # with no hooks applied. load_plugins() is idempotent, so the
+        # pre-construction call in Engine.__init__ stays a no-op. This
+        # mirrors vLLM, which loads plugins in EngineArgs.__post_init__.
+        from sglang.srt.plugins import load_plugins
+
+        load_plugins()
 
     def resolve_once(self) -> None:
         """Run the resolution pipeline, unless this record has been through it.
