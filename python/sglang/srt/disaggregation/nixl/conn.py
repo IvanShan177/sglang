@@ -2069,10 +2069,10 @@ class NixlKVReceiver(CommonKVReceiver):
         if not self.started_transfer:
             return status
 
-        timeout_result = self._check_waiting_timeout()
-        if timeout_result is not None:
-            return timeout_result
-
+        # Drain notifications before enforcing the waiting deadline. The NIXL
+        # progress thread may already have queued the completion notifications
+        # while scheduler-side polling was delayed. Timing out first would
+        # falsely fail the room without observing those completions.
         self.kv_mgr.update_transfer_status()
         if self.kv_mgr.check_transfer_done(self.bootstrap_room):  # type: ignore
             self.kv_mgr.addr_to_rooms_tracker[self.bootstrap_addr].discard(
@@ -2081,6 +2081,11 @@ class NixlKVReceiver(CommonKVReceiver):
             self.conclude_state = KVPoll.Success
             del self.kv_mgr.transfer_statuses[self.bootstrap_room]
             return self.conclude_state  # type: ignore
+
+        timeout_result = self._check_waiting_timeout()
+        if timeout_result is not None:
+            return timeout_result
+
         return KVPoll.WaitingForInput  # type: ignore
 
     def _register_kv_args(self):
