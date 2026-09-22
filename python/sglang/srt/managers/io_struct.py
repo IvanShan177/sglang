@@ -628,37 +628,51 @@ class GenerateReqInput(BaseReq):
 
     def _normalize_bootstrap_params(self, num):
         """Normalize bootstrap parameters for batch processing."""
+
+        def normalize_list_param(param, default_value, param_name):
+            if param is None:
+                return [default_value] * num
+            if not isinstance(param, list):
+                return [param] * num
+            if len(param) == num:
+                # The PD router already expands bootstrap metadata for n > 1.
+                return param
+            if len(param) == self.batch_size:
+                return param * self.parallel_sample_num
+            raise ValueError(
+                f"The length of {param_name} should be either the batch size "
+                f"({self.batch_size}) or the expanded batch size ({num}), got {len(param)}."
+            )
+
         # Normalize bootstrap_host
-        if self.bootstrap_host is None:
-            self.bootstrap_host = [None] * num
-        elif not isinstance(self.bootstrap_host, list):
-            self.bootstrap_host = [self.bootstrap_host] * num
-        elif isinstance(self.bootstrap_host, list):
-            self.bootstrap_host = self.bootstrap_host * self.parallel_sample_num
+        self.bootstrap_host = normalize_list_param(
+            self.bootstrap_host, None, "bootstrap_host"
+        )
 
         # Normalize bootstrap_port
-        if self.bootstrap_port is None:
-            self.bootstrap_port = [None] * num
-        elif not isinstance(self.bootstrap_port, list):
-            self.bootstrap_port = [self.bootstrap_port] * num
-        elif isinstance(self.bootstrap_port, list):
-            self.bootstrap_port = self.bootstrap_port * self.parallel_sample_num
+        self.bootstrap_port = normalize_list_param(
+            self.bootstrap_port, None, "bootstrap_port"
+        )
 
         # Normalize bootstrap_room
         if self.bootstrap_room is None:
             self.bootstrap_room = [None] * num
         elif not isinstance(self.bootstrap_room, list):
             self.bootstrap_room = [self.bootstrap_room + i for i in range(num)]
-        elif isinstance(self.bootstrap_room, list):
-            self.bootstrap_room = self.bootstrap_room * self.parallel_sample_num
+        else:
+            self.bootstrap_room = normalize_list_param(
+                self.bootstrap_room, None, "bootstrap_room"
+            )
 
         # Normalize bootstrap_pair_key
-        if self.bootstrap_pair_key is None:
-            self.bootstrap_pair_key = [None] * num
-        elif not isinstance(self.bootstrap_pair_key, list):
-            self.bootstrap_pair_key = [self.bootstrap_pair_key] * num
-        elif isinstance(self.bootstrap_pair_key, list):
-            self.bootstrap_pair_key = self.bootstrap_pair_key * self.parallel_sample_num
+        self.bootstrap_pair_key = normalize_list_param(
+            self.bootstrap_pair_key, None, "bootstrap_pair_key"
+        )
+
+        # Normalize decode_tp_size
+        self.decode_tp_size = normalize_list_param(
+            self.decode_tp_size, None, "decode_tp_size"
+        )
 
     def _validate_session_params(self):
         """Validate that session parameters are properly formatted."""

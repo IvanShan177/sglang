@@ -212,12 +212,14 @@ impl PDRouter {
     }
 
     fn get_completion_batch_size(req: &CompletionRequest) -> Option<usize> {
-        if let StringOrArray::Array(arr) = &req.prompt {
-            if !arr.is_empty() {
-                return Some(arr.len());
-            }
-        }
-        None
+        let prompt_count = match &req.prompt {
+            StringOrArray::Array(arr) if !arr.is_empty() => arr.len(),
+            _ => 1,
+        };
+        let sample_count = req.n.unwrap_or(1) as usize;
+        let expanded_batch_size = prompt_count.saturating_mul(sample_count);
+
+        (expanded_batch_size > 1).then_some(expanded_batch_size)
     }
 
     // Static key strings to avoid per-request allocations
@@ -1584,6 +1586,37 @@ mod tests {
             .build();
         worker.set_healthy(healthy);
         Box::new(worker)
+    }
+
+    #[test]
+    fn test_chat_parallel_sampling_uses_one_bootstrap_room_per_choice() {
+        let body: ChatCompletionRequest = serde_json::from_value(json!({
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "n": 4
+        }))
+        .expect("valid chat request");
+
+        assert_eq!(PDRouter::get_chat_batch_size(&body), Some(4));
+    }
+
+    #[test]
+    fn test_completion_parallel_sampling_expands_bootstrap_batch_size() {
+        let scalar_body: CompletionRequest = serde_json::from_value(json!({
+            "model": "test-model",
+            "prompt": "Hello",
+            "n": 3
+        }))
+        .expect("valid scalar completion request");
+        let batch_body: CompletionRequest = serde_json::from_value(json!({
+            "model": "test-model",
+            "prompt": ["Hello", "World"],
+            "n": 3
+        }))
+        .expect("valid batch completion request");
+
+        assert_eq!(PDRouter::get_completion_batch_size(&scalar_body), Some(3));
+        assert_eq!(PDRouter::get_completion_batch_size(&batch_body), Some(6));
     }
 
     #[test]

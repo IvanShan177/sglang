@@ -15,6 +15,7 @@ Covers:
 import asyncio
 import dataclasses
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 from sglang.test.ci.ci_register import register_cpu_ci
@@ -461,6 +462,62 @@ class TestDiscardPendingReqStates(CustomTestCase):
         obj.rid = ["p1", "already_gone"]
         tm._discard_pending_req_states(obj)  # must not raise
         self.assertNotIn("p1", tm.rid_to_state)
+
+    def test_discard_marks_all_parallel_placeholders_finished(self):
+        tm = _make_tokenizer_manager()
+        rids = ["sample_0", "sample_1", "sample_2"]
+        states = []
+        for rid in rids:
+            state = _make_req_state(rid)
+            state.time_stats.set_finished_time = Mock()
+            states.append(state)
+            tm.rid_to_state[rid] = state
+
+        obj = Mock(spec=GenerateReqInput)
+        obj.is_single = False
+        obj.rid = list(rids)
+        tm._discard_pending_req_states(obj, mark_finished=True)
+
+        self.assertFalse(tm.rid_to_state)
+        for state in states:
+            state.time_stats.set_finished_time.assert_called_once_with()
+
+
+class TestParallelSamplingBootstrapAssignment(CustomTestCase):
+    def test_assigns_distinct_sample_major_bootstrap_metadata(self):
+        source = SimpleNamespace(
+            bootstrap_host=[f"host-{i}" for i in range(6)],
+            bootstrap_port=[9000 + i for i in range(6)],
+            bootstrap_room=[100 + i for i in range(6)],
+            bootstrap_pair_key=[f"pair-{i}" for i in range(6)],
+            decode_tp_size=[2 + i for i in range(6)],
+        )
+
+        observed_rooms = [[], []]
+        for prompt_index in range(2):
+            for sample_index in range(3):
+                request_obj = SimpleNamespace()
+                tokenized_obj = SimpleNamespace()
+                TokenizerManager._assign_parallel_sample_bootstrap(
+                    source,
+                    request_obj,
+                    tokenized_obj,
+                    prompt_index=prompt_index,
+                    sample_index=sample_index,
+                    batch_size=2,
+                )
+
+                expanded_index = sample_index * 2 + prompt_index
+                self.assertEqual(request_obj.bootstrap_room, 100 + expanded_index)
+                self.assertEqual(
+                    tokenized_obj.bootstrap_pair_key, f"pair-{expanded_index}"
+                )
+                self.assertEqual(
+                    request_obj.decode_tp_size, tokenized_obj.decode_tp_size
+                )
+                observed_rooms[prompt_index].append(request_obj.bootstrap_room)
+
+        self.assertEqual(observed_rooms, [[100, 102, 104], [101, 103, 105]])
 
 
 class TestGenerateRequestCleanupOnDispatchFailure(CustomTestCase):

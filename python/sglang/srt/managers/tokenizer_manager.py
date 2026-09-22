@@ -1536,6 +1536,29 @@ class TokenizerManager(TokenizerControlMixin, TokenizerManagerScoreMixin):
                         f"Request is disconnected from the client side (type 3). Abort request {obj.rid=}"
                     )
 
+    @staticmethod
+    def _assign_parallel_sample_bootstrap(
+        obj: GenerateReqInput,
+        request_obj: GenerateReqInput,
+        tokenized_obj: TokenizedGenerateReqInput,
+        *,
+        prompt_index: int,
+        sample_index: int,
+        batch_size: int,
+    ):
+        """Assign sample-major PD bootstrap metadata to one generated child."""
+        expanded_index = sample_index * batch_size + prompt_index
+        for attr in (
+            "bootstrap_host",
+            "bootstrap_port",
+            "bootstrap_room",
+            "bootstrap_pair_key",
+            "decode_tp_size",
+        ):
+            value = getattr(obj, attr)[expanded_index]
+            setattr(request_obj, attr, value)
+            setattr(tokenized_obj, attr, value)
+
     async def _handle_batch_request(
         self,
         obj: Union[GenerateReqInput, EmbeddingReqInput],
@@ -1589,29 +1612,51 @@ class TokenizerManager(TokenizerControlMixin, TokenizerManagerScoreMixin):
                 *(self._tokenize_one_request(obj) for obj in objs)
             )
 
-            # Cache the common prefix for parallel sampling
-            for i in range(batch_size):
-                tmp_obj = copy.copy(objs[i])
-                tokenized_obj = copy.copy(tokenized_objs[i])
-                # Ensure independent mm_items so wrap_shm_features won't mutate the original
-                if hasattr(tokenized_obj, "mm_inputs") and tokenized_obj.mm_inputs:
-                    tokenized_obj.mm_inputs = copy.copy(tokenized_obj.mm_inputs)
-                    tokenized_obj.mm_inputs.mm_items = [
-                        copy.copy(item) for item in tokenized_obj.mm_inputs.mm_items
-                    ]
-                tokenized_obj.rid = tmp_obj.regenerate_rid()
-                tokenized_obj.sampling_params = copy.copy(tokenized_obj.sampling_params)
-                tokenized_obj.sampling_params.max_new_tokens = 0
-                tokenized_obj.stream = False
-                self._init_req_state(tmp_obj)
-                self._send_one_request(tokenized_obj)
-                await self._wait_one_response(tmp_obj, request).__anext__()
+            has_disaggregation_bootstrap = isinstance(obj, GenerateReqInput) and any(
+                room is not None for room in obj.bootstrap_room
+            )
+
+            # Cache the common prefix for parallel sampling. In disaggregated mode,
+            # every request must use a unique bootstrap room, so do not consume and
+            # immediately reuse a child room for this internal cache-only request.
+            if not has_disaggregation_bootstrap:
+                for i in range(batch_size):
+                    tmp_obj = copy.copy(objs[i])
+                    tokenized_obj = copy.copy(tokenized_objs[i])
+                    # Ensure independent mm_items so wrap_shm_features won't mutate the original
+                    if hasattr(tokenized_obj, "mm_inputs") and tokenized_obj.mm_inputs:
+                        tokenized_obj.mm_inputs = copy.copy(tokenized_obj.mm_inputs)
+                        tokenized_obj.mm_inputs.mm_items = [
+                            copy.copy(item) for item in tokenized_obj.mm_inputs.mm_items
+                        ]
+                    tokenized_obj.rid = tmp_obj.regenerate_rid()
+                    tokenized_obj.sampling_params = copy.copy(
+                        tokenized_obj.sampling_params
+                    )
+                    tokenized_obj.sampling_params.max_new_tokens = 0
+                    tokenized_obj.stream = False
+                    self._init_req_state(tmp_obj)
+                    self._send_one_request(tokenized_obj)
+                    await self._wait_one_response(tmp_obj, request).__anext__()
 
             # Expand requests, assign new rids for them, and send them
             for i in range(batch_size):
-                for _ in range(obj.parallel_sample_num):
+                for sample_index in range(obj.parallel_sample_num):
                     tmp_obj = copy.copy(objs[i])
                     tokenized_obj = copy.copy(tokenized_objs[i])
+
+                    # Input expansion is sample-major: [batch] * n. Preserve that
+                    # layout when assigning the per-child PD bootstrap metadata.
+                    if isinstance(obj, GenerateReqInput):
+                        self._assign_parallel_sample_bootstrap(
+                            obj,
+                            tmp_obj,
+                            tokenized_obj,
+                            prompt_index=i,
+                            sample_index=sample_index,
+                            batch_size=batch_size,
+                        )
+
                     # Ensure independent mm_items so wrap_shm_features won't mutate the original
                     if hasattr(tokenized_obj, "mm_inputs") and tokenized_obj.mm_inputs:
                         tokenized_obj.mm_inputs = copy.copy(tokenized_obj.mm_inputs)
@@ -1628,8 +1673,10 @@ class TokenizerManager(TokenizerControlMixin, TokenizerManagerScoreMixin):
                     generators.append(self._wait_one_response(tmp_obj, request))
                     rids.append(tmp_obj.rid)
 
-                self.rid_to_state[objs[i].rid].time_stats.set_finished_time()
-                del self.rid_to_state[objs[i].rid]
+            # _init_req_state creates placeholders for every normalized rid before
+            # this method replaces them with regenerated child rids. Generated rids
+            # are already expanded to batch_size * n, so clean all placeholders.
+            self._discard_pending_req_states(obj, mark_finished=True)
 
         # Wait for all requests
         is_stream = hasattr(obj, "stream") and obj.stream
@@ -2863,7 +2910,7 @@ class TokenizerManager(TokenizerControlMixin, TokenizerManagerScoreMixin):
                 time_stats.init_trace_ctx(rid, bootstrap_room, external_trace_header)
             time_stats.set_created_time(created_time)
 
-    def _discard_pending_req_states(self, obj):
+    def _discard_pending_req_states(self, obj, *, mark_finished=False):
         """Drop rid_to_state entries created by _init_req_state for *obj*.
 
         Safe to call after a partial/failed dispatch: only entries still present
@@ -2875,7 +2922,9 @@ class TokenizerManager(TokenizerControlMixin, TokenizerManagerScoreMixin):
         else:
             rids = obj.rid
         for rid in rids:
-            self.rid_to_state.pop(rid, None)
+            state = self.rid_to_state.pop(rid, None)
+            if mark_finished and state is not None:
+                state.time_stats.set_finished_time()
 
     def _should_dispatch_to_encoder(
         self, obj: Union[GenerateReqInput, EmbeddingReqInput]

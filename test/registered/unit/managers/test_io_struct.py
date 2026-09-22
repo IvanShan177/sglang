@@ -263,6 +263,63 @@ class TestGenerateReqInputNormalization(CustomTestCase):
         # Modalities should be set for all 3 examples
         self.assertEqual(req.modalities, ["image", "image", "image"])
 
+    def test_parallel_sampling_preserves_router_expanded_bootstrap_metadata(self):
+        """PD router metadata already expanded to n children must not be repeated."""
+        req = GenerateReqInput(
+            text="Hello",
+            sampling_params={"n": 3},
+            bootstrap_host=["prefill-0", "prefill-0", "prefill-0"],
+            bootstrap_port=[8999, 8999, 8999],
+            bootstrap_room=[101, 102, 103],
+            bootstrap_pair_key=["pair-0", "pair-1", "pair-2"],
+            decode_tp_size=[4, 4, 4],
+        )
+
+        req.normalize_batch_and_arguments()
+
+        self.assertEqual(req.bootstrap_host, ["prefill-0"] * 3)
+        self.assertEqual(req.bootstrap_port, [8999] * 3)
+        self.assertEqual(req.bootstrap_room, [101, 102, 103])
+        self.assertEqual(req.bootstrap_pair_key, ["pair-0", "pair-1", "pair-2"])
+        self.assertEqual(req.decode_tp_size, [4, 4, 4])
+        self.assertEqual([req[i].bootstrap_room for i in range(3)], [101, 102, 103])
+
+    def test_parallel_sampling_expands_per_prompt_bootstrap_metadata(self):
+        """Per-prompt bootstrap metadata should follow the sample-major layout."""
+        req = GenerateReqInput(
+            text=["Prompt 1", "Prompt 2"],
+            sampling_params={"n": 2},
+            bootstrap_host=["prefill-0", "prefill-1"],
+            bootstrap_port=[8999, 9000],
+            bootstrap_room=[101, 102],
+            bootstrap_pair_key=["pair-0", "pair-1"],
+            decode_tp_size=[4, 8],
+        )
+
+        req.normalize_batch_and_arguments()
+
+        self.assertEqual(
+            req.bootstrap_host,
+            ["prefill-0", "prefill-1", "prefill-0", "prefill-1"],
+        )
+        self.assertEqual(req.bootstrap_port, [8999, 9000, 8999, 9000])
+        self.assertEqual(req.bootstrap_room, [101, 102, 101, 102])
+        self.assertEqual(
+            req.bootstrap_pair_key, ["pair-0", "pair-1", "pair-0", "pair-1"]
+        )
+        self.assertEqual(req.decode_tp_size, [4, 8, 4, 8])
+
+    def test_parallel_sampling_rejects_misaligned_bootstrap_metadata(self):
+        """Bootstrap metadata must match the original or expanded batch size."""
+        req = GenerateReqInput(
+            text=["Prompt 1", "Prompt 2"],
+            sampling_params={"n": 2},
+            bootstrap_room=[101, 102, 103],
+        )
+
+        with self.assertRaisesRegex(ValueError, "length of bootstrap_room"):
+            req.normalize_batch_and_arguments()
+
     def test_audio_data_handling(self):
         """Test handling of audio_data."""
         req = copy.deepcopy(self.base_req)
