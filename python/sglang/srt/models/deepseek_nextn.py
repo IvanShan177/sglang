@@ -14,6 +14,7 @@
 
 """Inference-only DeepSeek NextN Speculative Decoding."""
 
+import json
 import logging
 import os
 from contextlib import ExitStack
@@ -106,7 +107,37 @@ class DeepseekModelNextN(nn.Module):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        if enable_nextn_moe_bf16_cast_to_fp8(quant_config):
+        def has_packed_nvfp4_nextn_moe() -> bool:
+            try:
+                if quant_config is None or quant_config.get_name() != "modelopt_fp4":
+                    return False
+                server_args = get_global_server_args()
+                model_path = (
+                    server_args.speculative_draft_model_path or server_args.model_path
+                )
+                index_path = os.path.join(model_path, "model.safetensors.index.json")
+                if not os.path.isfile(index_path):
+                    return False
+                with open(index_path) as f:
+                    weight_map = json.load(f).get("weight_map", {})
+                nextn_layer_id = getattr(config, "num_hidden_layers", None)
+                if nextn_layer_id is None:
+                    return False
+                prefix = f"model.layers.{nextn_layer_id}.mlp.experts.0.gate_proj"
+                return (
+                    f"{prefix}.weight" in weight_map
+                    and f"{prefix}.weight_scale" in weight_map
+                )
+            except Exception as exc:
+                logger.warning("PATCHED-glm52-nvfp4-nextn-moe: failed to inspect nextn MoE checkpoint: %s", exc)
+                return False
+
+        if has_packed_nvfp4_nextn_moe():
+            logger.warning(
+                "PATCHED-glm52-nvfp4-nextn-moe: preserving modelopt_fp4 quantization for packed NextN MoE experts"
+            )
+            moe_quant_config_override = quant_config
+        elif enable_nextn_moe_bf16_cast_to_fp8(quant_config):
             # refer to real DeepSeek V3 quant config
             moe_quant_config_override = Fp8Config(
                 is_checkpoint_fp8_serialized=True,

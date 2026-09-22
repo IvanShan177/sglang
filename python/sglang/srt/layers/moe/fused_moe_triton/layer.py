@@ -808,6 +808,98 @@ class FusedMoE(torch.nn.Module):
             expert_id=expert_id,
         )
 
+    def _try_load_glm52_nvfp4_dense_shared_expert(
+        self,
+        param: torch.nn.Parameter,
+        loaded_weight: torch.Tensor,
+        shard_id: str,
+        expert_id: int,
+    ) -> bool:
+        """PATCHED-glm52-nvfp4-shared-fusion: pack BF16 shared experts into ModelOpt NVFP4 fused slots."""
+        method = self.quant_method
+        if hasattr(self, "scheme"):
+            method = self.scheme
+        if method.__class__.__name__ == "KTEPWrapperMethod":
+            method = method.gpu_method
+
+        if not isinstance(method, ModelOptNvFp4FusedMoEMethod):
+            return False
+        if not getattr(self, "_has_fused_shared", False):
+            return False
+        if expert_id < getattr(self, "_num_local_routed", 0):
+            return False
+        if loaded_weight.dtype not in (torch.bfloat16, torch.float16, torch.float32):
+            return False
+        if shard_id not in ("w1", "w2", "w3"):
+            return False
+
+        try:
+            from sglang.jit_kernel.nvfp4 import scaled_fp4_quant as fp4_quantize
+        except Exception:
+            fp4_quantize = None
+        if fp4_quantize is None:
+            return False
+
+        if shard_id in ("w1", "w3"):
+            if param is not self.w13_weight:
+                return False
+            whole_weight = self.w13_weight.data[expert_id]
+            whole_scale = self.w13_weight_scale.data[expert_id]
+            shard_rows = whole_weight.shape[0] // 2 if self.moe_runner_config.is_gated else whole_weight.shape[0]
+            shard_idx = 0 if shard_id == "w1" else 1
+            row_start = shard_idx * shard_rows if self.moe_runner_config.is_gated else 0
+            target_weight = whole_weight.narrow(0, row_start, shard_rows)
+            target_scale = whole_scale.narrow(0, row_start, shard_rows)
+            if hasattr(self, "w13_weight_scale_2"):
+                if self.w13_weight_scale_2.dim() == 2 and self.w13_weight_scale_2.shape[1] > shard_idx:
+                    self.w13_weight_scale_2.data[expert_id, shard_idx].fill_(1.0)
+                else:
+                    self.w13_weight_scale_2.data[expert_id].fill_(1.0)
+            if hasattr(self, "w13_input_scale"):
+                global_expert_id = self._num_global_routed + (expert_id - self._num_local_routed)
+                if global_expert_id < self.w13_input_scale.shape[0]:
+                    self.w13_input_scale.data[global_expert_id, shard_idx].fill_(1.0)
+        else:
+            if param is not self.w2_weight:
+                return False
+            target_weight = self.w2_weight.data[expert_id]
+            target_scale = self.w2_weight_scale.data[expert_id]
+            if hasattr(self, "w2_weight_scale_2"):
+                self.w2_weight_scale_2.data[expert_id].fill_(1.0)
+            if hasattr(self, "w2_input_scale"):
+                global_expert_id = self._num_global_routed + (expert_id - self._num_local_routed)
+                if global_expert_id < self.w2_input_scale.shape[0]:
+                    self.w2_input_scale.data[global_expert_id].fill_(1.0)
+
+        dense = loaded_weight.to(device=target_weight.device, dtype=torch.bfloat16).contiguous()
+        global_scale = torch.ones((), device=dense.device, dtype=torch.float32)
+
+        candidates = (dense, dense.t().contiguous()) if dense.dim() == 2 else (dense,)
+        last_error = None
+        for cand in candidates:
+            try:
+                if cand.shape[-1] % 16 != 0:
+                    continue
+                packed, block_scale = fp4_quantize(cand, global_scale)
+                block_scale = block_scale[: target_scale.shape[0], : target_scale.shape[1]]
+                if packed.shape == target_weight.shape and block_scale.shape == target_scale.shape:
+                    target_weight.copy_(packed)
+                    target_scale.copy_(block_scale)
+                    return True
+            except Exception as exc:
+                last_error = exc
+
+        logger.warning(
+            "PATCHED-glm52-nvfp4-shared-fusion: unable to pack shared expert shard=%s expert=%s loaded=%s target=%s scale=%s error=%s",
+            shard_id,
+            expert_id,
+            tuple(loaded_weight.shape),
+            tuple(target_weight.shape),
+            tuple(target_scale.shape),
+            last_error,
+        )
+        return False
+
     def _load_gguf_weight(
         self,
         param: torch.nn.Parameter,
@@ -952,6 +1044,14 @@ class FusedMoE(torch.nn.Module):
             expert_id=expert_id,
             shard_dim=shard_dim,
             tp_rank=tp_rank,
+        ):
+            return
+
+        if self._try_load_glm52_nvfp4_dense_shared_expert(
+            param=param,
+            loaded_weight=loaded_weight,
+            shard_id=shard_id,
+            expert_id=expert_id,
         ):
             return
 

@@ -381,7 +381,15 @@ class GenerateReqInput:
         elif self.input_ids is not None:
             if len(self.input_ids) == 0:
                 raise ValueError("input_ids cannot be empty.")
-            if isinstance(self.input_ids[0], int):
+            first = self.input_ids[0]
+            if isinstance(first, int):
+                self.is_single = True
+                self.batch_size = 1
+            elif isinstance(first, (list, tuple)):
+                self.is_single = False
+                self.batch_size = len(self.input_ids)
+            elif hasattr(first, "__int__") and not isinstance(first, (list, tuple, str, bytes)):
+                self.input_ids = [int(x) for x in self.input_ids]
                 self.is_single = True
                 self.batch_size = 1
             else:
@@ -466,6 +474,8 @@ class GenerateReqInput:
                 raise ValueError("Text should be a list for batch processing.")
             self.text = self.text * self.parallel_sample_num
         elif self.input_ids is not None:
+            if isinstance(self.input_ids, list) and self.input_ids and not isinstance(self.input_ids[0], list):
+                self.input_ids = [self.input_ids]
             if not isinstance(self.input_ids, list) or not isinstance(
                 self.input_ids[0], list
             ):

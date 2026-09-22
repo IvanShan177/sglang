@@ -83,8 +83,8 @@ def flashinfer_cutedsl_moe_masked(
 
     if hidden_states[1] is not None:
 
-        a_q = hidden_states[0].view(torch.uint8)
-        a_q_sf = hidden_states[1].view(torch.float8_e4m3fn)
+        a_q = hidden_states[0].contiguous().view(torch.uint8)
+        a_q_sf = hidden_states[1].contiguous().view(torch.float8_e4m3fn)
         m, k_by_2, num_experts = a_q.shape
         k = k_by_2 * 2
     else:
