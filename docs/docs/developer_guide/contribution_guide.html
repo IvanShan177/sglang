@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Install SGLang from Source</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">
+<link href="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.css" rel="stylesheet" type="text/css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <hr>
+<h2 id="title-contribution-guidemode-widemetatagsdescription-sglang-contribution-guide-source-install-pre-commit-unit-tests-ci-triggers-code-style-sgl-kernel-updates">title: &quot;Contribution Guide&quot;
+mode: wide
+metatags:
+description: &quot;SGLang contribution guide: source install, pre-commit, unit tests, CI triggers, code style, sgl-kernel updates.&quot;</h2>
+<p>Welcome to <strong>SGLang</strong>! We appreciate your interest in contributing. This guide provides a concise overview of how to set up your environment, run tests, build documentation, and open a Pull Request (PR). Whether you’re fixing a small bug or developing a major feature, we encourage following these steps for a smooth contribution process.</p>
+<h2 id="install-sglang-from-source">Install SGLang from Source</h2>
+<h3 id="fork-and-clone-the-repository">Fork and clone the repository</h3>
+<p><strong>Note</strong>: New contributors do <strong>not</strong> have the write permission to push to the official SGLang repo. Please fork the repository under your GitHub account, then clone your fork locally.</p>
+<pre><code class="language-bash">git <span class="hljs-built_in">clone</span> https://github.com/&lt;your_user_name&gt;/sglang.git
+</code></pre>
+<h3 id="build-from-source">Build from source</h3>
+<p>Refer to <a href="../get-started/install#method-2-from-source">Install SGLang from Source</a>.</p>
+<h2 id="format-code-with-pre-commit">Format code with pre-commit</h2>
+<p>We use <a href="https://pre-commit.com/">pre-commit</a> to maintain consistent code style checks. Before pushing your changes, please run:</p>
+<pre><code class="language-bash">pip3 install pre-commit
+pre-commit install
+pre-commit run --all-files
+</code></pre>
+<ul>
+<li><strong><code>pre-commit run --all-files</code></strong> manually runs all configured checks, applying fixes if possible. If it fails the first time, re-run it to ensure lint errors are fully resolved. Make sure your code passes all checks <strong>before</strong> creating a Pull Request.</li>
+<li><strong>Do not commit</strong> directly to the <code>main</code> branch. Always create a new branch (e.g., <code>feature/my-new-feature</code>), push your changes, and open a PR from that branch.</li>
+<li>Documentation links and anchors are checked with Mintlify in CI. To run the same version locally, install it with <code>npm install -g mint@4.2.559</code>, then run <code>cd docs &amp;&amp; mint broken-links --check-anchors --check-redirects</code>.</li>
+<li>The manual <code>lychee</code> pre-commit hook checks links in the repository-level <code>README.md</code>: <code>pre-commit run --hook-stage manual lychee --all-files</code>.</li>
+</ul>
+<h2 id="run-and-add-unit-tests">Run and add unit tests</h2>
+<p>If you add a feature or fix a bug, add focused regression coverage when the test protects a concrete behavior, invariant, or bookkeeping contract.</p>
+<h3 id="unit-tests-no-server-required">Unit tests (no server required)</h3>
+<p>Unit tests live under <a href="https://github.com/sgl-project/sglang/tree/main/test/registered/unit"><code>test/registered/unit/</code></a>, organized to mirror the <code>python/sglang/srt/</code> source tree. These tests validate component logic <strong>without</strong> launching a server or loading real model weights.
+SGLang supports both Python's built-in <a href="https://docs.python.org/3/library/unittest.html">unittest</a> framework and <a href="https://docs.pytest.org/">pytest</a>. Registered CI tests must use <code>CustomTestCase</code> instead of raw <code>unittest.TestCase</code>, register themselves with <code>register_*_ci(...)</code>, and include a standard <code>__main__</code> entry point. CI discovers registrations with <code>test/run_suite.py</code> and executes each selected test file directly with fail-fast enabled.</p>
+<p><strong>When to add a unit test:</strong> If you modify a file under <code>python/sglang/srt/</code>, check whether a corresponding test exists in <code>test/registered/unit/</code> and add coverage for your changes. For example:</p>
+<pre><code class="language-text">srt/mem_cache/radix_cache.py   →  unit/mem_cache/test_radix_cache_unit.py
+srt/sampling/sampling_params.py →  unit/sampling/test_sampling_params.py
+</code></pre>
+<p><strong>Run tests locally:</strong></p>
+<pre><code class="language-bash"><span class="hljs-comment"># Closest to how CI executes an individual registered test file</span>
+python3 <span class="hljs-built_in">test</span>/registered/unit/mem_cache/test_radix_cache_unit.py
+
+<span class="hljs-comment"># Run a registered CI suite</span>
+python3 <span class="hljs-built_in">test</span>/run_suite.py --hw cpu --suite base-a-test-cpu
+
+<span class="hljs-comment"># Pytest remains useful for local directory-level discovery</span>
+pytest <span class="hljs-built_in">test</span>/registered/unit/mem_cache/ -v
+</code></pre>
+<p><strong>Run with coverage:</strong></p>
+<pre><code class="language-bash">pytest <span class="hljs-built_in">test</span>/registered/unit/ --cov --cov-config=.coveragerc -v
+</code></pre>
+<p>For conventions on CI registration, test structure, and examples, see <a href="https://github.com/sgl-project/sglang/tree/main/test/registered/unit/README.html"><code>test/registered/unit/README.md</code></a>.</p>
+<h3 id="e2e-tests-server-required">E2E tests (server required)</h3>
+<p>For tests that require launching a server, refer to <a href="https://github.com/sgl-project/sglang/tree/main/test/registered/README.html"><code>test/registered/README.md</code></a> for guidance on where to place your test.</p>
+<p>For detailed instructions on running tests and integrating them into CI, refer to <a href="https://github.com/sgl-project/sglang/tree/main/test/README.html">test/README.md</a>.</p>
+<h2 id="write-documentation">Write documentation</h2>
+<p>Documentation is a good way for new contributors to learn the SGLang codebase. See <a href="https://github.com/sgl-project/sglang/tree/main/docs/README.html">docs/README.md</a> for the current Mintlify setup and validation commands.</p>
+<h2 id="test-the-accuracy">Test the accuracy</h2>
+<p>If your code changes model output, run an accuracy evaluation appropriate for the affected model and feature. For example, after launching a server, run the unified GSM8K evaluator:</p>
+<pre><code class="language-bash"><span class="hljs-comment"># Launch a server</span>
+sglang serve --model-path Qwen/Qwen3-8B
+
+<span class="hljs-comment"># Evaluate</span>
+python3 -m sglang.test.run_eval \
+  --eval-name gsm8k \
+  --port 30000 \
+  --num-examples 200
+</code></pre>
+<p>Please note that the above script is primarily a sanity check, not a rigorous accuracy or speed test.
+This test can have significant variance (1%–5%) in accuracy due to batching and the non-deterministic nature of the inference engine.
+Also, do not rely on the &quot;Latency/Output throughput&quot; from this script, as it is not a proper speed test.</p>
+<p>GSM8K is too easy for many state-of-the-art models, so use a more challenging or feature-specific evaluation when appropriate. See <a href="/docs/developer_guide/evaluating_new_models">Evaluating New Models with SGLang</a> for current MMLU, GSM8K, HellaSwag, GPQA, HumanEval, and MMMU commands. Additional examples are available in <a href="https://github.com/sgl-project/sglang/tree/main/test/manual/eval">test/manual/eval</a>.</p>
+<h2 id="benchmark-the-speed">Benchmark the speed</h2>
+<p>Refer to <a href="./benchmark_and_profiling">Benchmark and Profiling</a>.</p>
+<h2 id="requesting-a-review-for-merge">Requesting a review for merge</h2>
+<p>You can follow the pull request merge process described in <a href="https://github.com/sgl-project/sglang/blob/main/.github/MAINTAINER.md">MAINTAINER.md</a>.
+You will need to work with the Merge Oncall, Codeowner, and other reviewers to get their approvals.
+Then your PR can be merged.</p>
+<h2 id="how-to-trigger-ci-tests">How to Trigger CI Tests</h2>
+<p>We have a lot of open PRs but limited CI machines, so only top and trusted contributors have permission to trigger CI tests.
+Users with permission are listed in the <a href="https://github.com/sgl-project/sglang/blob/main/.github/CI_PERMISSIONS.json">CI_PERMISSIONS.json</a></p>
+<p><strong>PR authors</strong> can use <code>/rerun-failed-ci</code> on their own PRs even if they are not listed in <code>CI_PERMISSIONS.json</code>. Selective reruns have additional rules because they execute PR code on self-hosted runners; see the permission table below.</p>
+<p>For CI to run on a pull request, it must have the &quot;run-ci&quot; label. Authorized users can add the label or rerun failed tests by commenting on the PR with one of these commands:</p>
+<ul>
+<li><code>/tag-run-ci-label</code>: Adds the &quot;run-ci&quot; label. Only <strong>future</strong> commits trigger CI; the current commit is unaffected. Add the <code>extra</code> argument (<code>/tag-run-ci-label extra</code>) to additionally apply the &quot;run-ci-extra&quot; label, opting the PR into the extra test workflow (<code>pr-test-extra.yml</code>).</li>
+<li><code>/rerun-failed-ci</code>: Reruns workflows from the latest commit with conclusion <strong>failed, skipped, cancelled, or timed out</strong>.</li>
+<li><code>/tag-and-rerun-ci</code>: Runs both. Use this on a fresh PR to kick off CI on the current commit — <code>/tag-run-ci-label</code> alone won't. Accepts the same <code>extra</code> argument (<code>/tag-and-rerun-ci extra</code>).</li>
+<li><code>/run-full-ci</code>: Baseline <strong>and</strong> extra CI. Short form of <code>/tag-and-rerun-ci extra</code> — applies both labels, then reruns everything at the current commit that didn't succeed.</li>
+<li><code>/run-extra-ci</code>: Extra CI <strong>only</strong>. Applies both labels, then reruns just <code>PR Test Extra</code>, leaving baseline CI runs alone. Use it when baseline is already green and you only need the extra tier.</li>
+<li><code>/rerun-test &lt;test-spec&gt; [&lt;test-spec&gt; ...]</code>: Reruns one or more specific tests directly. A spec may select a file, class, or method using <code>&lt;file&gt;::&lt;TestClass&gt;[.&lt;test_method&gt;]</code>. Multiple specs and file globs are supported. <code>--changed</code> (short form <code>-c</code>) adds every test file the PR itself adds or modifies (under <code>test/registered/</code> or the multimodal test directory), so a PR that touches several tests can rerun them all without listing them. Examples: <code>/rerun-test test_srt_endpoint.py</code>, <code>/rerun-test registered/core/test_srt_endpoint.py::TestSRTEndpoint.test_simple_decode</code>, <code>/rerun-test test_a.py test_b.py</code>, <code>/rerun-test test_*backend*.py</code>, <code>/rerun-test --changed</code>, or <code>/rerun-test -c</code>.</li>
+<li><code>/rerun-group &lt;group&gt; [&lt;group&gt; ...]</code>: Expands one or more registered test groups (for example, <code>/rerun-group rust-server</code>) and dispatches their tests through the same selective-rerun workflow. Groups are defined in <a href="https://github.com/sgl-project/sglang/blob/main/scripts/ci/rerun_test_groups.json"><code>scripts/ci/rerun_test_groups.json</code></a>.</li>
+</ul>
+<p>The rerun commands have the following permission rules:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>PR author</th>
+<th>Other users</th>
+<th>Additional rule for fork PRs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/rerun-failed-ci</code></td>
+<td>Always allowed on their own PR</td>
+<td>Must have <code>can_rerun_failed_ci</code> in <code>CI_PERMISSIONS.json</code></td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>/run-full-ci</code>, <code>/run-extra-ci</code></td>
+<td>Not auto-allowed -- these apply labels, which the PR-author allowance does not cover</td>
+<td>Must have both <code>can_tag_run_ci_label</code> and <code>can_rerun_failed_ci</code> in <code>CI_PERMISSIONS.json</code> (every listed user has both)</td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>/rerun-test</code>, <code>/rerun-group</code></td>
+<td>No special allowance; judged as any other commenter</td>
+<td>Must have <code>cooldown_interval_minutes: 0</code> in <code>CI_PERMISSIONS.json</code>, or <code>write</code>/<code>admin</code> repository permission</td>
+<td>None -- the same rule applies wherever the PR comes from</td>
+</tr>
+</tbody>
+</table>
+<Warning>
+Selective reruns do not build or install a PR-local `sglang-kernel` wheel. If a PR changes `python/sglang/kernels/aot/` or code that depends on that AOT change, use the normal/full PR CI workflow. A `/rerun-test` or `/rerun-group` result may use the pinned released kernel and does not validate the combined change.
+</Warning>
+<p>If you have permission, the <a href="https://github.com/sgl-project/sglang/actions/workflows/slash-command-handler.yml">Slash Command Handler</a> will run your command and react with a 👍 to your comment. It may take up to a few minutes for the reaction to appear. Here’s a usage <a href="https://github.com/sgl-project/sglang/pull/14253#issuecomment-3599509302">example</a>.</p>
+<p>If a command isn't recognized, the handler reacts 😕 instead, and replies with the closest matching command when there is one. A comment with no reaction at all means the handler never saw it — check the command is spelled as listed above.</p>
+<p>To avoid spamming a PR with too many <code>/rerun-failed-ci</code> comments, you can also trigger the command by editing an existing comment and adding any suffix (e.g., <code>/rerun-failed-ci try again</code>).</p>
+<p>If you don’t have permission and you’re not the PR author, please ask maintainers to trigger CI for you.</p>
+<h3 id="ci-rate-limits">CI rate limits</h3>
+<p>Due to CI scheduling and limited resources, higher-priority PRs may preempt running jobs. In such cases, you may need to rerun the tests.
+We apply CI rate limits to prevent abuse and ensure fair usage of our CI resources.</p>
+<p>Each CI workflow has a default limit defined in its workflow configuration file. For example, in <a href="https://github.com/sgl-project/sglang/blob/main/.github/workflows/pr-gate.yml">pr-gate.yml</a>, the default cooldown period is 120 minutes, and each workflow can override it via the <code>cool-down-minutes</code> input parameter:</p>
+<pre><code class="language-yaml"><span class="hljs-attr">cool-down-minutes:</span>
+  <span class="hljs-attr">description:</span> <span class="hljs-string">&quot;Cooldown period in minutes for low-permission users; 0 disables rate limiting&quot;</span>
+  <span class="hljs-attr">type:</span> <span class="hljs-string">number</span>
+  <span class="hljs-attr">default:</span> <span class="hljs-number">120</span>
+</code></pre>
+<p>Users listed in <a href="https://github.com/sgl-project/sglang/blob/main/.github/CI_PERMISSIONS.json">CI_PERMISSIONS.json</a> may have a per-user cooldown interval. In practice, we use the minimum of the workflow’s default window and the user-specific interval.</p>
+<h2 id="code-style-guidance">Code style guidance</h2>
+<ul>
+<li>Avoid code duplication. If the same code snippet (more than five lines) appears multiple times, extract it into a shared function.</li>
+<li>Minimize device synchronization. Reduce expensive CPU-GPU synchronization operations, such as <code>tensor.item()</code> or <code>tensor.cpu()</code>, whenever possible. Use vectorized code.</li>
+<li>Prioritize extreme efficiency. SGLang is a runtime, and most of your code runs on the critical path for every request. Optimize all minor overheads as much as possible, especially in the model forward code.
+<ul>
+<li>A common pattern is some runtime checks in the model forward pass (e.g., <a href="https://github.com/sgl-project/sglang/blob/f1b0eda55c2c4838e8ab90a0fac7fb1e3d7064ab/python/sglang/srt/models/deepseek_v2.py#L486-L491">this</a>). These are very likely the same for every layer. Please cache the result as a single boolean value in <code>__init__</code> whenever possible.</li>
+</ul>
+</li>
+<li>Make functions as pure as possible. Avoid in-place modification of arguments.</li>
+<li>Prefer immutable data and compute configuration-derived values once during initialization when their inputs cannot change.</li>
+<li>Keep functions under roughly 100 lines and make orchestration functions read like high-level pseudocode by extracting details into focused helpers.</li>
+<li>Keep files concise. If a file exceeds 2,000 lines of code, split it into cohesive smaller modules.</li>
+<li>Avoid adding mixins; prefer composition or plain functions. Use <code>msgspec.Struct</code> for new data containers instead of <code>dataclasses.dataclass</code> or <code>attrs</code>.</li>
+<li>Prefer keyword arguments for calls with two or more arguments, and pass callees the specific values they need instead of a large state-holding object.</li>
+<li>In a file, put core data structures at the top of the file. Put utility functions at the bottom of the file.</li>
+<li>Keep tests run fast.
+<ul>
+<li>If a single test file runs longer than 500 seconds, split it into multiple smaller files (e.g., <code>test_eagle_infer_a.py</code>, <code>test_eagle_infer_b.py</code>).</li>
+<li>If a single job in a GitHub Actions workflow runs longer than 30 minutes, split it into smaller jobs or steps.</li>
+<li>Reuse server launches across test methods in E2E test files.</li>
+</ul>
+</li>
+<li>Never use <code>pickle.loads()</code>, <code>pickle.load()</code>, or <code>recv_pyobj()</code> to deserialize untrusted or network-received data. Python's <a href="https://docs.python.org/3/library/pickle.html">pickle module is not secure</a> — it can execute arbitrary code during deserialization. Use safe serialization formats such as <a href="https://github.com/jcrist/msgspec">msgpack</a> or JSON instead.</li>
+<li>When supporting new hardware or features, follow these guidelines:
+<ul>
+<li>Do not drastically change existing code.</li>
+<li>Always prefer new files to introduce specific components for your new hardware (e.g., <code>allocator_ascend.py</code>).</li>
+<li>If you write multiple if/else blocks for new features, ensure the common path (e.g., NVIDIA hardware or the existing code path) is the first branch.</li>
+</ul>
+</li>
+</ul>
+<h2 id="how-to-update-kernels-in-sglang">How to update kernels in SGLang</h2>
+<p>Choose the implementation and release path based on the kernel's dependencies. For a lightweight kernel that does not depend on CUTLASS or another large C++ project, prefer the in-tree JIT kernel path. Use the AOT <code>sglang-kernel</code> path for heavyweight kernels, large C++ dependencies, or operations that need wheel packaging and Torch operator registration. FlashInfer-based kernels are an exception and may still use the JIT path. SGLang also consumes separately released custom builds of DeepGEMM and DeepEP; update those in their source repositories as described below.</p>
+<h3 id="update-sglang-kernel">Update sglang-kernel</h3>
+<p>The <code>sglang-kernel</code> distribution (formerly <code>sgl-kernel</code>) is a separate Python package, but its source now lives in this repository under <code>python/sglang/kernels/aot/</code>. Normal PR CI builds and installs a PR-local <code>sglang-kernel</code> wheel, so it can test an AOT kernel and its caller together. This does not establish compatibility after merge: installed SGLang and scheduled CI use the released version pinned in <code>python/pyproject.toml</code>. If a caller unconditionally requires a new operator or a changed kernel contract, first merge and release the kernel, update the pinned <code>sglang-kernel</code> version, and then land the caller. A combined PR is acceptable only when every supported path remains correct with the pinned wheel—for example, when the caller checks operator availability and retains a semantically equivalent fallback until the released wheel includes the change. Selective <code>/rerun-test</code> and <code>/rerun-group</code> workflows do not install PR-local wheels and cannot validate the combined AOT path.</p>
+<p>For an AOT kernel change:</p>
+<ol>
+<li>Implement the kernel under <code>python/sglang/kernels/aot/csrc/</code> and update its declaration, Torch registration, and CMake source list.</li>
+<li>Expose the Python API under <code>python/sglang/kernels/aot/python/sgl_kernel/</code>.</li>
+<li>Add correctness tests under <code>python/sglang/kernels/aot/tests/</code> and a benchmark under <code>python/sglang/kernels/aot/benchmark/</code> when applicable.</li>
+<li>Build and test from <code>python/sglang/kernels/aot/</code> following its <a href="https://github.com/sgl-project/sglang/tree/main/python/sglang/kernels/aot/README.html">README</a>. Do not bump the pinned <code>sglang-kernel</code> version in <code>python/pyproject.toml</code> merely to test a PR-local kernel change.</li>
+</ol>
+<h3 id="update-sgl-deep-gemm">Update sgl-deep-gemm</h3>
+<p>Develop SGLang's customized DeepGEMM package on the <a href="https://github.com/sgl-project/DeepGEMM/tree/dev"><code>dev</code> branch of <code>sgl-project/DeepGEMM</code></a>. Rebase incoming changes onto <code>dev</code>, place new or modified package tests under <code>sgl_deep_gemm/tests/</code>, and follow the <a href="https://github.com/sgl-project/DeepGEMM/blob/dev/sgl_deep_gemm/README.md"><code>sgl-deep-gemm</code> README</a> to build and install a local wheel. After the implementation is merged, ask the SGLang team to run the <a href="https://github.com/sgl-project/sglang/actions/workflows/release-whl-deepgemm.yml">sgl-deep-gemm release workflow</a> with the new version, CUDA target, and DeepGEMM branch. Once all required wheels are published and verified, update the <code>sgl-deep-gemm</code> pin in <code>python/pyproject.toml</code> before landing SGLang code that requires the new or changed behavior.</p>
+<h3 id="update-sgl-deep-ep">Update sgl-deep-ep</h3>
+<p>Develop <code>sgl-deep-ep</code> in <a href="https://github.com/sgl-project/DeepEP"><code>sgl-project/DeepEP</code></a>. Use <code>sgl-deepep</code>, the implementation branch for CUDA 13 on x86_64 or aarch64. Merge packaging changes into <code>sgl-deepep-packaging</code>. The <a href="https://github.com/sgl-project/DeepEP/blob/sgl-deepep-packaging/sgl_deep_ep/README.md"><code>sgl-deep-ep</code> README</a> describes the platform prerequisites and release matrix.</p>
+<p>To validate locally, check out the selected implementation branch as <code>DeepEP-source</code> and the packaging branch as <code>DeepEP-packaging</code>. Install the required build dependencies first. The following example builds a wheel for the host architecture, installs that exact wheel, and verifies that its guarded package import succeeds:</p>
+<pre><code class="language-bash">DEEPEP_OUTPUT_DIR=<span class="hljs-string">&quot;<span class="hljs-subst">$(mktemp -d)</span>&quot;</span>
+bash DeepEP-packaging/sgl_deep_ep/build_sgl_deep_ep.sh \
+  DeepEP-<span class="hljs-built_in">source</span> \
+  DeepEP-packaging/sgl_deep_ep \
+  <span class="hljs-string">&quot;<span class="hljs-variable">${DEEPEP_OUTPUT_DIR}</span>&quot;</span> \
+  13.0 \
+  <span class="hljs-string">&quot;<span class="hljs-subst">$(uname -m)</span>&quot;</span>
+python3 -m pip install --force-reinstall --no-deps \
+  <span class="hljs-string">&quot;<span class="hljs-variable">${DEEPEP_OUTPUT_DIR}</span>&quot;</span>/sgl_deep_ep-*.whl
+python3 -c <span class="hljs-string">&quot;import deep_ep; print(deep_ep.__file__)&quot;</span>
+</code></pre>
+<p>The import check validates packaging and binary loading, but not communication correctness. On a configured multi-GPU host, also run:</p>
+<pre><code class="language-bash">python3 DeepEP-<span class="hljs-built_in">source</span>/tests/elastic/test_ep.py --num-processes 8
+</code></pre>
+<p>Adjust <code>--num-processes</code> to the available GPUs and run the internode or low-latency tests when those transports changed. After local validation, ask the SGLang team to run the <a href="https://github.com/sgl-project/sglang/actions/workflows/release-whl-deepep.yml">sgl-deep-ep release workflow</a> with the new version and packaging ref. After verifying the published wheels for the supported Python versions and architectures, update the <code>sgl-deep-ep</code> pin in <code>python/pyproject.toml</code> before landing dependent SGLang changes.</p>
+<h2 id="tips-for-newcomers">Tips for newcomers</h2>
+<p>If you want to contribute but don’t have a specific idea in mind, pick issues labeled <a href="https://github.com/sgl-project/sglang/issues?q=is%3Aissue+label%3A%22good+first+issue%22%2C%22help+wanted%22">“good first issue” or “help wanted”</a>. These tasks typically have lower complexity and provide an excellent introduction to the codebase.</p>
+<p>Also check out the following materials as startup guide:</p>
+<ul>
+<li><a href="https://github.com/sgl-project/mini-sglang">Mini-SGLang</a> for a quick overview on the structure of sglang.</li>
+<li><a href="https://github.com/zhaochenyang20/Awesome-ML-SYS-Tutorial/tree/main/sglang/code-walk-through">Code Walk-through</a> for a deeper look into SGLang’s workflow.</li>
+<li><a href="https://drive.google.com/file/d/1mwOZEtipNLJzrflCTodj34KhuOZEoEw5/view?usp=drive_link">GTC-2026 Training Lab</a> for hands-on practices of how to do optimization, benchmarking, or profiling on a launched SGLang instance.</li>
+</ul>
+<p>If you have any questions or want to start a discussion, please feel free to ask in our <a href="https://slack.sglang.io">Slack channel</a>.</p>
+<p>Thank you for your interest in SGLang. Happy coding!</p>
+
+            <script async src="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.js"></script>
+            
+        </body>
+        </html>
