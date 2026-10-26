@@ -2889,7 +2889,10 @@ class KVCacheConfigurator:
             # Floor-align to 4096 B: the factories `.view()` the whole uint8
             # buffer as the KV/state dtype, so the total must be a dtype-size
             # multiple and a profiled budget is not. Flooring never overcommits.
-            config.unified_total_bytes = budget_bytes - (budget_bytes % 4096)
+            unified_bytes = budget_bytes - self._private_draft_kv_bytes(
+                config.max_total_num_tokens
+            )
+            config.unified_total_bytes = unified_bytes - (unified_bytes % 4096)
         max_tokens = self._apply_token_constraints(config.max_total_num_tokens)
         if cap_tokens is not None:
             max_tokens = min(max_tokens, cap_tokens)
@@ -2906,6 +2909,23 @@ class KVCacheConfigurator:
                 max_tokens, get_schedule().page_size
             )
         return config
+
+    def _private_draft_kv_bytes(self, max_total_num_tokens: int) -> int:
+        """Bytes of the KV budget priced for a DSPARK draft that keeps a private
+        pool on a mamba-hybrid unified host; that pool sits outside the unified
+        buffer, so the buffer must not take them too."""
+        if (
+            self.is_draft_worker
+            or self.mambaish_config is None
+            or not self.spec_algorithm.is_dspark()
+            or self._fused_draft_decision().placement is not None
+        ):
+            return 0
+        from sglang.srt.model_executor.pool_configurator import (
+            _dflash_draft_cell_size,
+        )
+
+        return max_total_num_tokens * _dflash_draft_cell_size(self)
 
     def _handle_max_mamba_cache(self, total_rest_memory):
         config = self.mambaish_config

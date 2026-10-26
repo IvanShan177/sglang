@@ -879,7 +879,9 @@ class TestPrefillAdder(CustomTestCase):
 
         adder = self.create_adder(self.create_running_batch([req]), new_token_ratio=0.1)
 
-        self.assertEqual(adder.memory_budget.total_offset, 150)
+        # The physical offset also reserves fixed-length requests in full
+        # (_get_running_request_total_token_offset), so both match here.
+        self.assertEqual(adder.memory_budget.total_offset, 1_500)
         self.assertEqual(adder.logical_total_offset, 1_500)
 
     @patch(

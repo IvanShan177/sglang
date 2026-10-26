@@ -298,6 +298,7 @@ class MultiEndedAllocator(BaseTokenToKVPoolAllocator):
         device: str,
         is_id_owner: bool,
         virtual_num_pages: Optional[int] = None,
+        max_virtual_rows: Optional[int] = None,
         page_size: int = 1,
         shards_under_dcp: bool = False,
         need_sort: bool = False,
@@ -358,6 +359,13 @@ class MultiEndedAllocator(BaseTokenToKVPoolAllocator):
         self.num_virtual_ids = (
             self.num_pages if virtual_num_pages is None else virtual_num_pages
         )
+        if max_virtual_rows is not None:
+            # An owner may hand out fewer ids than the buffer has pages: a pool
+            # direct-indexed by these ids (a private draft KV pool) is sized by
+            # the id space, while the physical pages stay shared with the peer.
+            assert is_id_owner, "only an id owner may cap its virtual-id space"
+            capped_pages = self.min_page_index + -(-max_virtual_rows // self.pool_page_size)
+            self.num_virtual_ids = min(self.num_virtual_ids, capped_pages)
         assert self.num_virtual_ids > 0, "virtual page count must be positive"
         # Page 0 is the padding anchor; the trailing row is the -1 sentinel.
         self.virtual_to_physical = torch.full(
@@ -523,7 +531,7 @@ class MultiEndedAllocator(BaseTokenToKVPoolAllocator):
         if self.is_id_owner:
             self.free_virtual_ids = torch.arange(
                 self.min_page_index,
-                self.num_pages,
+                self.num_virtual_ids,
                 dtype=torch.int64,
                 device=self.device,
             )

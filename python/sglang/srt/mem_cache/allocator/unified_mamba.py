@@ -92,6 +92,7 @@ class UnifiedMambaTokenToKVPoolAllocator(BaseTokenToKVPoolAllocator):
             sub_pool_name="full",
             device=device,
             is_id_owner=True,
+            max_virtual_rows=logical_token_capacity,
             page_size=page_size,
             shards_under_dcp=True,
             need_sort=need_sort,
@@ -255,7 +256,11 @@ class UnifiedMambaTokenToKVPoolAllocator(BaseTokenToKVPoolAllocator):
 
     @property
     def draft_virtual_id_space(self) -> int:
-        return self.size_full
+        # Full ids stop at the logical cap, not at the whole buffer viewed as KV.
+        return min(
+            self.size_full,
+            self.full_attn_allocator.num_virtual_ids * self.page_size,
+        )
 
     @property
     def size_mamba(self) -> int:

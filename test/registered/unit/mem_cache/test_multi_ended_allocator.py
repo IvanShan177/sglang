@@ -3266,6 +3266,32 @@ class TestDcpWidening(unittest.TestCase):
             self.assertEqual(allocator.logical_token_capacity, cap * 2)
             self.assertEqual(allocator.logical_available_size(), cap * 2)
 
+    def test_composite_full_virtual_ids_stop_at_logical_capacity(self):
+        # A private draft pool is direct-indexed by FULL virtual ids, so the id
+        # space (and the draft pool sized from it) must not span the whole buffer.
+        page_size = 4
+        cap = 3 * page_size
+        allocator = self._build_composite(
+            page_size=page_size, logical_token_capacity=cap
+        )
+        full = allocator.full_attn_allocator
+        self.assertEqual(full.num_virtual_ids, full.min_page_index + 3)
+        self.assertEqual(
+            allocator.draft_virtual_id_space, full.num_virtual_ids * page_size
+        )
+        self.assertLess(allocator.draft_virtual_id_space, allocator.size_full)
+        self.assertGreater(allocator.available_size(), cap)
+
+        allocated = allocator.alloc(cap)
+        self.assertIsNotNone(allocated)
+        self.assertLess(int(allocated.max()), allocator.draft_virtual_id_space)
+        self.assertIsNone(allocator.alloc(page_size))
+        allocator.free(allocated)
+        self.assertIsNotNone(allocator.alloc(page_size))
+
+        uncapped = self._build_composite(page_size=page_size)
+        self.assertEqual(uncapped.draft_virtual_id_space, uncapped.size_full)
+
     def _build_donor_cache(self, allocator, mamba_slot_allocator, full_leaves):
         cache = object.__new__(UnifiedRadixCache)
         cache.disable = False

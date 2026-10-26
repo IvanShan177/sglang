@@ -303,5 +303,48 @@ class TestDraftBindingDispatch(CustomTestCase):
         self.assertEqual(pools.req_to_token_pool.kind, "private-compact")
 
 
+
+class TestPrivateDraftKvBytes(CustomTestCase):
+    """A mamba-hybrid unified host whose DSPARK draft keeps a private pool: the
+    KV cell already prices that pool, so the unified buffer must leave those
+    bytes out rather than take the whole KV budget (and overcommit by the draft)."""
+
+    DRAFT_ROW_BYTES = 10240  # K3 DSpark draft under DCP8: 1280 B/token x 8
+
+    @staticmethod
+    def _configurator(*, dspark=True, mamba=True, draft_worker=False, fused=False):
+        placement = object() if fused else None
+
+        class _Configurator(kcc.KVCacheConfigurator):
+            def _fused_draft_decision(self):
+                return SimpleNamespace(placement=placement)
+
+        kvc = object.__new__(_Configurator)
+        kvc.is_draft_worker = draft_worker
+        kvc.mambaish_config = object() if mamba else None
+        kvc.spec_algorithm = SimpleNamespace(is_dspark=lambda: dspark)
+        return kvc
+
+    def test_only_a_private_dspark_draft_on_a_mamba_host_is_left_out(self):
+        with patch(
+            "sglang.srt.model_executor.pool_configurator._dflash_draft_cell_size",
+            return_value=self.DRAFT_ROW_BYTES,
+        ):
+            self.assertEqual(
+                self._configurator()._private_draft_kv_bytes(1_011_136),
+                1_011_136 * self.DRAFT_ROW_BYTES,
+            )
+            for kwargs in (
+                dict(dspark=False),
+                dict(mamba=False),
+                dict(draft_worker=True),
+                dict(fused=True),
+            ):
+                with self.subTest(**kwargs):
+                    self.assertEqual(
+                        self._configurator(**kwargs)._private_draft_kv_bytes(1_011_136),
+                        0,
+                    )
+
 if __name__ == "__main__":
     unittest.main()
