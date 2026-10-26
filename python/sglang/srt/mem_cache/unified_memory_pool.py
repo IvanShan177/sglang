@@ -984,6 +984,57 @@ class UnifiedMLATokenToKVPool(MLATokenToKVPool):
         )
 
 
+def _alloc_kda_spec_rings(
+    *,
+    num_layers: int,
+    num_rows: int,
+    temporal_state_shape: Tuple[int, int, int],
+    num_k_heads: int,
+    ring_len: int,
+    min_ring_len: int,
+    activation_dtype: torch.dtype,
+    device,
+) -> Dict[str, torch.Tensor]:
+    """KDA ReplaySSM spec-verify rings, one row per running request.
+
+    Same layouts as `MambaPool`'s KDA rings, which the verify kernels and
+    `commit_kda_replayssm_after_verify` index by request row, never by state slot.
+    """
+    if ring_len & (ring_len - 1) != 0:
+        raise ValueError(f"spec-verify ring length must be a power of two, got {ring_len}")
+    if ring_len < min_ring_len:
+        raise ValueError(
+            f"spec-verify ring too small: {ring_len} < {min_ring_len} (early-flush margin)"
+        )
+    hv, v_dim, k_dim = temporal_state_shape
+    rows = (num_layers, num_rows)
+    return dict(
+        replayssm_rawv=torch.zeros(
+            rows + (hv, ring_len, v_dim), dtype=activation_dtype, device=device
+        ),
+        replayssm_rawk=torch.zeros(
+            rows + (num_k_heads, ring_len, k_dim), dtype=activation_dtype, device=device
+        ),
+        replayssm_g=torch.zeros(
+            rows + (hv, ring_len, k_dim), dtype=torch.float32, device=device
+        ),
+        replayssm_beta=torch.zeros(
+            rows + (hv, ring_len), dtype=torch.float32, device=device
+        ),
+    )
+
+
+def _kda_spec_ring_kwargs(*, cache_params, enabled: bool, ring_len: int) -> dict:
+    """`UnifiedMambaPool` ring kwargs: set only for a KDA model under
+    --enable-linear-replayssm-spec (non-KDA shapes have no k-head count)."""
+    if not (enabled and cache_params.is_kda):
+        return {}
+    return dict(
+        kda_spec_ring_len=ring_len,
+        num_k_heads_per_tp=cache_params.shape.num_k_heads_per_tp,
+    )
+
+
 class UnifiedMambaPool(MambaPool):
     """Mamba state pool whose conv/temporal state are strided views into a `UnifiedKVPool`.
 
@@ -1001,6 +1052,8 @@ class UnifiedMambaPool(MambaPool):
         mamba_layer_ids: List[int],
         enable_memory_saver: bool = False,
         speculative_num_draft_tokens: Optional[int] = None,
+        kda_spec_ring_len: Optional[int] = None,
+        num_k_heads_per_tp: Optional[int] = None,
     ):
         spec = unified_buffer.mamba_spec(sub_pool_name)
         assert spec.layer_num == len(mamba_layer_ids)
@@ -1022,15 +1075,17 @@ class UnifiedMambaPool(MambaPool):
         self.enable_custom_mem_pool = False
         self.custom_mem_pool = None
         self.num_mamba_layers = spec.layer_num
-        # GDN/KDA ReplaySSM / spec unsupported; replicate parent's disabled-state
-        # attrs so unconditional reads (e.g. `replayssm_cache_base is not None` in
-        # the req-slot alloc path) and `... is not None` guards don't AttributeError.
+        # Only the KDA spec-verify fold is supported (kda_spec_ring_len set): its ring
+        # is request-row scratch outside the buffer. GDN ReplaySSM and the decode
+        # ring key state by slot and stay off; the parent's attrs are replicated so
+        # unconditional reads don't AttributeError.
+        kda_spec_fold = kda_spec_ring_len is not None
         self.enable_linear_replayssm = False
-        self.linear_replayssm_cache_len = 16
+        self.linear_replayssm_cache_len = kda_spec_ring_len or 16
         self.replayssm_write_pos = None
-        self.replayssm_is_kda = False
-        self.enable_linear_replayssm_spec = False
-        self.replayssm_spec_fold = False
+        self.replayssm_is_kda = kda_spec_fold
+        self.enable_linear_replayssm_spec = kda_spec_fold
+        self.replayssm_spec_fold = kda_spec_fold
         self.replayssm_cache_base = None
         self.replayssm_is_flush = None
         self.debug_memory_pool = False
@@ -1052,17 +1107,37 @@ class UnifiedMambaPool(MambaPool):
         ssm_dtype = spec.temporal_dtype
         if speculative_num_draft_tokens is not None:
             with self.memory_saver_adapter.region(GPU_MEMORY_TYPE_KV_CACHE):
-                intermediate_ssm_state_cache = torch.zeros(
-                    size=(
-                        self.num_mamba_layers,
-                        spec_state_size + 1,
-                        speculative_num_draft_tokens,
-                        temporal_state_shape[0],
-                        temporal_state_shape[1],
-                        temporal_state_shape[2],
-                    ),
-                    dtype=ssm_dtype,
-                    device=unified_buffer.device,
+                # The fold replays the ring into `temporal`; nothing reads per-step
+                # snapshots, and the configurator does not reserve them.
+                intermediate_ssm_state_cache = (
+                    None
+                    if kda_spec_fold
+                    else torch.zeros(
+                        size=(
+                            self.num_mamba_layers,
+                            spec_state_size + 1,
+                            speculative_num_draft_tokens,
+                            temporal_state_shape[0],
+                            temporal_state_shape[1],
+                            temporal_state_shape[2],
+                        ),
+                        dtype=ssm_dtype,
+                        device=unified_buffer.device,
+                    )
+                )
+                rings = (
+                    _alloc_kda_spec_rings(
+                        num_layers=self.num_mamba_layers,
+                        num_rows=spec_state_size + 1,
+                        temporal_state_shape=temporal_state_shape,
+                        num_k_heads=num_k_heads_per_tp,
+                        ring_len=kda_spec_ring_len,
+                        min_ring_len=2 * speculative_num_draft_tokens,
+                        activation_dtype=conv_dtype,
+                        device=unified_buffer.device,
+                    )
+                    if kda_spec_fold
+                    else {}
                 )
                 intermediate_conv_window_cache = [
                     torch.zeros(
@@ -1083,8 +1158,10 @@ class UnifiedMambaPool(MambaPool):
                 temporal=temporal_view,
                 intermediate_ssm=intermediate_ssm_state_cache,
                 intermediate_conv_window=intermediate_conv_window_cache,
+                **rings,
             )
         else:
+            assert not kda_spec_fold, "the KDA spec ring needs speculative decoding"
             self.mamba_cache = self.State(conv=list(conv_views), temporal=temporal_view)
 
         self.mem_usage = unified_buffer.total_bytes / GB
@@ -1295,10 +1372,10 @@ class UnifiedHybridReqToTokenPool(HybridReqToTokenPool):
         ngram_context_len: int = 0,
         ngram_eos_token_id: int = 0,
     ):
-        # mamba_envelope_layout / speculative_eagle_topk / enable_linear_replayssm /
-        # linear_replayssm_cache_len / enable_linear_replayssm_spec: accepted to match
-        # the parent signature but NOT forwarded — the shared pool's conv/temporal
-        # state are fixed-shape views (replayssm/spec are gated off under unified).
+        # mamba_envelope_layout / speculative_eagle_topk / enable_linear_replayssm:
+        # accepted to match the parent signature but NOT forwarded — the shared
+        # pool's conv/temporal state are fixed-shape views. Of the ReplaySSM modes,
+        # only the KDA spec-verify fold is forwarded (its ring is request-row scratch).
         if short_conv_layer_ids or ngram_context_len:
             raise ValueError(
                 "Qwen4-Exp PLE side states are not supported with "
@@ -1335,6 +1412,11 @@ class UnifiedHybridReqToTokenPool(HybridReqToTokenPool):
             mamba_layer_ids=mamba_layer_ids,
             enable_memory_saver=self.enable_memory_saver,
             speculative_num_draft_tokens=speculative_num_draft_tokens,
+            **_kda_spec_ring_kwargs(
+                cache_params=cache_params,
+                enabled=enable_linear_replayssm_spec,
+                ring_len=linear_replayssm_cache_len,
+            ),
         )
         # Wired in by init_unified_mamba_pools once the mamba allocator exists.
         self.mamba_allocator = None

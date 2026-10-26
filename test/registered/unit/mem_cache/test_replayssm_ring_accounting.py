@@ -133,6 +133,42 @@ class TestReplaySSMRingAccounting(CustomTestCase):
             _kda_params().replayssm_ring_bytes_per_req(record_len=RL) * (running + 1),
         )
 
+    def test_unified_kda_spec_ring_matches_accounting(self):
+        # UnifiedMambaPool allocates the same request-row ring outside the
+        # unified buffer; its bytes must equal what the solver reserves.
+        from sglang.srt.mem_cache.unified_memory_pool import (
+            _alloc_kda_spec_rings,
+            _kda_spec_ring_kwargs,
+        )
+
+        params = _kda_params()
+        rows = 3
+        rings = _alloc_kda_spec_rings(
+            num_layers=len(LAYERS),
+            num_rows=rows,
+            temporal_state_shape=params.shape.temporal,
+            num_k_heads=params.shape.num_k_heads_per_tp,
+            ring_len=RL,
+            min_ring_len=RL,
+            activation_dtype=params.dtype.conv,
+            device="cpu",
+        )
+        self.assertEqual(
+            sum(t.numel() * t.element_size() for t in rings.values()),
+            params.replayssm_ring_bytes_per_req(record_len=RL) * rows,
+        )
+        self.assertEqual(
+            _kda_spec_ring_kwargs(cache_params=params, enabled=True, ring_len=RL),
+            dict(kda_spec_ring_len=RL, num_k_heads_per_tp=4),
+        )
+        self.assertEqual(
+            _kda_spec_ring_kwargs(cache_params=params, enabled=False, ring_len=RL), {}
+        )
+        self.assertEqual(
+            _kda_spec_ring_kwargs(cache_params=_gdn_params(), enabled=True, ring_len=RL),
+            {},
+        )
+
     def test_zero_len_ring(self):
         self.assertEqual(_gdn_params().replayssm_ring_bytes_per_req(record_len=0), 0)
         self.assertEqual(_kda_params().replayssm_ring_bytes_per_req(record_len=0), 0)
