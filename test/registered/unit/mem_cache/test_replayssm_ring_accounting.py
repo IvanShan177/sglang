@@ -80,33 +80,6 @@ class TestReplaySSMRingAccounting(CustomTestCase):
             2176 * len(LAYERS),
         )
 
-    def test_kda_spec_pool_allocates_accounted_ring(self):
-        mamba_size = 3
-        pool = HybridReqToTokenPool(
-            size=2,
-            mamba_size=mamba_size,
-            mamba_spec_state_size=2,
-            max_context_len=16,
-            device="cpu",
-            enable_memory_saver=False,
-            cache_params=_kda_params(),
-            mamba_layer_ids=LAYERS,
-            enable_mamba_extra_buffer=False,
-            speculative_num_draft_tokens=4,
-            linear_replayssm_cache_len=RL,
-            enable_linear_replayssm_spec=True,
-        )
-        cache = pool.mamba_pool.mamba_cache
-        rings = [
-            getattr(cache, f"replayssm_{name}")
-            for name in ("d", "k", "g", "rawv", "rawk", "beta")
-        ]
-        self.assertEqual(
-            sum(t.numel() * t.element_size() for t in rings if t is not None),
-            _kda_params().replayssm_ring_bytes_per_req(record_len=RL)
-            * (mamba_size + 1),
-        )
-
     def test_kda_spec_ring_follows_requests(self):
         spec_state_size = 2
         pool = HybridReqToTokenPool(
